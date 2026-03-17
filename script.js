@@ -57,6 +57,11 @@ const sensorState = {
 // in its JSON output, but it doesn't have to. We handle both cases.
 const powerState = { battery:null, solar:null };
 
+// We keep track of raw lines we couldn't parse so we can show them in
+// the waiting panel — super helpful for debugging what the device is
+// actually spitting out before the JSON format is right
+let lastRawLine = '';
+
 
 // When the user clicks the nav button, we either open the connect modal
 // or trigger a disconnect depending on the current connection state
@@ -107,9 +112,16 @@ async function connectSerial() {
     isConnected  = true;
     isConnecting = false;
     firstPacket  = true;
+    lastRawLine  = '';
     setConnectionUI('connected');
     closeModal();
-    showToast('Device connected — waiting for first packet…');
+    showToast('Device connected — waiting for data…');
+
+    // the port is open so we remove all the no-device banners immediately —
+    // there's nothing worse than staring at "no device connected" when the
+    // nav bar is already green and you clearly just plugged something in
+    revealConnectedUI();
+
     startReadLoop();
 
   } catch (err) {
@@ -177,14 +189,127 @@ function flushBuffer() {
   lines.forEach(line => {
     line = line.trim();
     if (!line) return;
+
+    // try it as proper JSON first — that's the happy path
+    let parsed = null;
     try {
-      const data = JSON.parse(line);
-      ingestPacket(data);
+      parsed = JSON.parse(line);
     } catch (_) {
-      // Not valid JSON — just show it in the serial monitor as a raw line
-      logSerial(line);
+      // not clean JSON. before giving up let's try fixing common firmware
+      // mistakes — trailing commas, missing braces, that sort of thing.
+      // a lot of beginner Arduino sketches don't wrap the whole thing in {}
+      // or accidentally leave a trailing comma on the last field
+      try {
+        let attempt = line;
+        // wrap bare key:value output in braces if it looks like one
+        if (!attempt.startsWith('{')) attempt = '{' + attempt + '}';
+        // strip trailing commas before closing brace — super common mistake
+        attempt = attempt.replace(/,\s*}/g, '}');
+        parsed = JSON.parse(attempt);
+      } catch (_) {
+        // still not valid JSON even after the patch-up attempt.
+        // last resort — try to pull sensor values straight out of the
+        // human-readable text your firmware is printing. this handles
+        // lines like "Water Level Sensor Value: 1317 | Water Level: 32% | Status: Low"
+        // or "Temperature: 24.5C" or "Soil Moisture: 68%" without you
+        // having to change a single line of your ESP32 code.
+        const extracted = tryParseRawText(line);
+        if (extracted) {
+          logSerial(line + ' → parsed as text', 'ok');
+          ingestPacket(extracted);
+          return;
+        }
+
+        // genuinely can't figure it out — log it so the waiting panel
+        // can show the user exactly what's coming through the wire,
+        // which makes baud rate and format problems much easier to spot
+        lastRawLine = line;
+        updateWaitingPanel();
+        logSerial(line);
+        return;
+      }
     }
+
+    if (parsed) ingestPacket(parsed);
   });
+}
+
+// Tries to extract known sensor values from a plain-text line that the
+// firmware printed for human reading instead of as JSON. We look for
+// percentage values near known keywords, labelled numbers, and the
+// specific "| Water Level: 32% |" pipe-delimited format your ESP32 uses.
+// Returns a partial sensor object if anything useful was found, or null
+// if the line really doesn't contain anything we recognise.
+function tryParseRawText(line) {
+  const lower = line.toLowerCase();
+  const out   = {};
+
+  // helper — grabs the first number that appears after a keyword match
+  const grab = (pattern) => {
+    const m = line.match(pattern);
+    return m ? parseFloat(m[1]) : null;
+  };
+
+  // water level — handles all of these formats your ESP32 might send:
+  //   "Water Level: 32%"
+  //   "Water Level Sensor Value: 1317 | Water Level: 32% | Status: Low"
+  //   "water:32"  /  "water level:32"
+  // we scan the whole line for any % number that follows a "water level" label,
+  // using a global search so the pipe-delimited format doesn't fool us
+  let waterPct = null;
+  const waterMatches = [...line.matchAll(/water\s*level[^:|]*:\s*([\d.]+)\s*%/gi)];
+  if (waterMatches.length > 0) {
+    // grab the last match — in "...Value: 1317 | Water Level: 32%" the
+    // last one is always the actual percentage, not the raw ADC count
+    waterPct = parseFloat(waterMatches[waterMatches.length - 1][1]);
+  }
+  if (waterPct !== null && !isNaN(waterPct)) out.water = waterPct;
+  else {
+    // no percentage found anywhere — if there's a raw ADC reading we
+    // convert it from the typical 0–4095 ESP32 12-bit ADC range to 0–100%
+    const waterRaw = grab(/water\s*level\s*sensor\s*value[^:]*:\s*([\d.]+)/i);
+    if (waterRaw !== null) out.water = Math.round((waterRaw / 4095) * 100);
+  }
+
+  // soil moisture
+  const moist = grab(/(?:soil\s*)?moisture[^:]*:\s*([\d.]+)\s*%/i);
+  if (moist !== null) out.moisture = moist;
+  else {
+    const moistRaw = grab(/(?:soil\s*)?moisture[^:]*:\s*([\d.]+)/i);
+    if (moistRaw !== null) out.moisture = Math.round((moistRaw / 4095) * 100);
+  }
+
+  // temperature — grabs the number before an optional C or F suffix
+  const temp = grab(/temp(?:erature)?[^:]*:\s*([\d.]+)\s*[°]?[CF]?/i);
+  if (temp !== null) out.temp = temp;
+
+  // humidity
+  const hum = grab(/humid(?:ity)?[^:]*:\s*([\d.]+)\s*%?/i);
+  if (hum !== null) out.humidity = hum;
+
+  // soil pH
+  const ph = grab(/p\s*h[^:]*:\s*([\d.]+)/i);
+  if (ph !== null) out.ph = ph;
+
+  // light / lux / ldr
+  const light = grab(/(?:light|lux|ldr)[^:]*:\s*([\d.]+)/i);
+  if (light !== null) out.light = light;
+
+  // PIR / motion — looks for 1/0 or detected/clear keywords
+  if (/pir|motion/i.test(lower)) {
+    if (/detected|triggered|1/i.test(lower)) out.pir = 1;
+    else if (/clear|none|no motion|0/i.test(lower)) out.pir = 0;
+  }
+
+  // battery and solar while we're here
+  const bat = grab(/batt(?:ery)?[^:]*:\s*([\d.]+)\s*%?/i);
+  if (bat !== null) out.battery = bat;
+
+  const sol = grab(/solar[^:]*:\s*([\d.]+)/i);
+  if (sol !== null) out.solar = sol;
+
+  // only return something if we actually found at least one value
+  return Object.keys(out).length > 0 ? out : null;
 }
 
 // This runs every time we get a valid JSON packet from the device.
@@ -194,25 +319,39 @@ function ingestPacket(data) {
   const now = new Date();
   const ts  = now.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', second:'2-digit' });
 
+  // we accept any subset of these keys — if your device only has a water
+  // sensor right now, that's fine, just send {"water":75} and it'll work.
+  // all the other cards stay at their last known value or No Data.
   const keyMap = { moisture:'moisture', temp:'temp', humidity:'humidity',
                    ph:'ph', light:'light', water:'water', pir:'pir' };
 
   let hasAny = false;
   for (const [k, sk] of Object.entries(keyMap)) {
-    if (data[k] !== undefined && !isNaN(data[k])) {
+    if (data[k] !== undefined) {
       const v = parseFloat(data[k]);
-      sensorState[sk].value = v;
-      sensorHistory[sk].push(v);
-      if (sensorHistory[sk].length > MAX_HIST) sensorHistory[sk].shift();
-      hasAny = true;
+      if (!isNaN(v)) {
+        sensorState[sk].value = v;
+        sensorHistory[sk].push(v);
+        if (sensorHistory[sk].length > MAX_HIST) sensorHistory[sk].shift();
+        hasAny = true;
+      }
     }
   }
 
   // Battery and solar are totally optional fields — we update them if present
-  if (data.battery !== undefined) powerState.battery = parseFloat(data.battery);
-  if (data.solar   !== undefined) powerState.solar   = parseFloat(data.solar);
+  if (data.battery !== undefined && !isNaN(parseFloat(data.battery)))
+    powerState.battery = parseFloat(data.battery);
+  if (data.solar !== undefined && !isNaN(parseFloat(data.solar)))
+    powerState.solar = parseFloat(data.solar);
 
-  if (!hasAny) return;
+  // if none of the keys matched anything we know about, log it and bail —
+  // the packet was valid JSON but not in the LeafLink format at all
+  if (!hasAny) {
+    logSerial('Received JSON but no recognised sensor keys found: ' + JSON.stringify(data));
+    lastRawLine = JSON.stringify(data);
+    updateWaitingPanel();
+    return;
+  }
 
   // Keep the timestamp labels in sync with the history arrays
   histLabels.push(ts);
@@ -230,7 +369,9 @@ function ingestPacket(data) {
     firstPacket = false;
     revealLiveUI();
     initAllCharts();
-    showToast('Live data streaming from device.');
+    // figure out which sensors actually reported so we can tell the user
+    const active = Object.keys(keyMap).filter(k => sensorState[k].value !== null);
+    showToast('Live data streaming — ' + active.length + ' sensor' + (active.length !== 1 ? 's' : '') + ' active.');
   }
 
   // Refresh everything on screen with the new values
@@ -244,6 +385,57 @@ function ingestPacket(data) {
   logSerial(JSON.stringify(data), 'ok');
 }
 
+
+// Called the moment the port opens successfully, before any data has
+// arrived. This clears all the no-device banners right away and shows
+// the page skeleton with a "connected but waiting" message so the user
+// knows the link is live and we're just waiting for the firmware to
+// start sending. Sensor cards stay dimmed — revealLiveUI handles that
+// once the first actual packet comes through.
+function revealConnectedUI() {
+  document.getElementById('noBanner').style.display        = 'none';
+
+  document.getElementById('sensorsNoDevice').style.display = 'none';
+  document.getElementById('sensorsContent').style.display  = 'block';
+
+  document.getElementById('powerNoDevice').style.display   = 'none';
+  document.getElementById('powerContent').style.display    = 'block';
+
+  document.getElementById('historyNoDevice').style.display = 'none';
+  document.getElementById('historyContent').style.display  = 'block';
+
+  // show "waiting" message in the alerts panel instead of the no-device text
+  const panel = document.getElementById('alertsPanel');
+  if (panel) panel.innerHTML = '<div class="alert-none" id="waitingMsg">Device connected — waiting for the first packet from your microcontroller…</div>';
+
+  // populate the sensor table now so the user sees a proper table of
+  // No Data rows rather than just a blank empty tbody sitting there
+  populateSensorTable();
+
+  // show the dashboard chart waiting placeholder while we wait for data
+  document.getElementById('dashChartEmpty').style.display = 'flex';
+  document.getElementById('dashChart').style.display      = 'none';
+}
+
+// Updates the "waiting" panel with whatever raw line the device last sent
+// so the user can see what's actually coming through the serial port —
+// makes it really obvious if the baud rate is wrong or the JSON format
+// is off before a single valid packet has been received
+function updateWaitingPanel() {
+  const el = document.getElementById('waitingMsg');
+  if (!el) return;
+  if (lastRawLine) {
+    el.innerHTML = 'Device is sending data but it\'s not in the expected format yet.<br>'
+      + '<span style="font-family:\'Roboto Mono\',monospace;font-size:0.78rem;color:var(--accent);">Last received: '
+      + escapeHtml(lastRawLine.slice(0, 120))
+      + '</span><br><span style="font-size:0.78rem;">Check your baud rate and that your firmware outputs valid JSON ending with \\n</span>';
+  }
+}
+
+// quick HTML escape so raw serial output can't accidentally inject anything
+function escapeHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 
 // Called the moment the first real packet arrives. This removes all the
 // "no device" banners, shows the actual content, and turns the sensor
@@ -275,6 +467,7 @@ function resetToEmptyState() {
   powerState.battery = null;
   powerState.solar   = null;
   firstPacket = true;
+  lastRawLine = '';
 
   // Reset every sensor card back to dashes
   for (const k in sensorState) {
@@ -382,11 +575,11 @@ function updateSensorCards() {
     const cardEl = document.getElementById('card-' + key);
 
     if (valEl) {
-      if (value === null)      valEl.textContent = '—';
-      else if (key === 'pir')  valEl.textContent = value ? 'Motion!' : 'Clear';
-      else if (key === 'ph')   valEl.textContent = value.toFixed(1);
+      if (value === null)       valEl.textContent = '—';
+      else if (key === 'pir')   valEl.textContent = value ? 'Motion!' : 'Clear';
+      else if (key === 'ph')    valEl.textContent = value.toFixed(1);
       else if (key === 'light') valEl.textContent = Math.round(value);
-      else                     valEl.textContent = Math.round(value);
+      else                      valEl.textContent = Math.round(value);
     }
     if (unitEl) unitEl.textContent = value !== null ? ' ' + unit : '';
     if (barEl)  barEl.style.width  = barPct(key, value) + '%';
