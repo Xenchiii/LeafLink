@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>LeafLink — IoT Plant Monitoring System</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Roboto:wght@400;500&family=Open+Sans:wght@400;500&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+
+  <!-- Navigation bar — fixed at the top, holds the logo, page links, device status and connect button -->
+  <nav id="navbar">
+    <div class="nav-left">
+      <a class="nav-brand" href="#">
+        <span class="icon-leaf nav-brand-icon"></span>
+        LeafLink
+      </a>
+    </div>
+
+    <ul class="nav-links" id="navLinks">
+      <li><button onclick="showPage('dashboard')" class="active" data-page="dashboard">Dashboard</button></li>
+      <li><button onclick="showPage('sensors')"   data-page="sensors">Sensor Data</button></li>
+      <li><button onclick="showPage('power')"     data-page="power">Power &amp; Solar</button></li>
+      <li><button onclick="showPage('history')"   data-page="history">History</button></li>
+      <li><button onclick="showPage('about')"     data-page="about">About</button></li>
+    </ul>
+
+    <div class="nav-right">
+      <div class="device-status" id="deviceStatus">
+        <span class="status-dot" id="statusDot"></span>
+        <span class="status-label" id="statusLabel">No Device</span>
+      </div>
+      <button class="btn-connect" id="connectBtn" onclick="toggleConnection()">
+        <span class="icon-usb"></span>
+        <span id="connectBtnText">Connect Device</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- Connection modal — pops up when the user clicks Connect Device, lets them pick baud rate and open a serial port -->
+  <div class="modal-overlay" id="connectModal">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title-row">
+          <span class="icon-usb modal-icon"></span>
+          <h2>Connect Microcontroller</h2>
+        </div>
+        <button class="modal-close" onclick="closeModal()">
+          <span class="icon-close"></span>
+        </button>
+      </div>
+      <div class="modal-body">
+
+        <div class="modal-section">
+          <h3>Serial Configuration</h3>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Baud Rate</label>
+              <select id="baudRate" class="select-input">
+                <option value="9600" selected>9600</option>
+                <option value="19200">19200</option>
+                <option value="38400">38400</option>
+                <option value="57600">57600</option>
+                <option value="115200">115200</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Data Bits</label>
+              <select id="dataBits" class="select-input">
+                <option value="8" selected>8</option>
+                <option value="7">7</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Stop Bits</label>
+              <select id="stopBits" class="select-input">
+                <option value="1" selected>1</option>
+                <option value="2">2</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-section">
+          <h3>Expected JSON Format from Device</h3>
+          <div class="code-block">
+<pre>{"moisture":68,"temp":24.5,"humidity":62,
+ "ph":6.4,"light":820,"water":74,"pir":0}</pre>
+          </div>
+          <p class="modal-note">
+            Your device must send JSON packets over serial, each ending with a newline <code>\n</code>.
+            See the <strong>About</strong> page for the Arduino / ESP32 firmware snippet.
+          </p>
+        </div>
+
+        <div class="modal-section" id="serialLogSection" style="display:none;">
+          <h3>Serial Monitor</h3>
+          <div class="serial-log" id="serialLog"></div>
+        </div>
+
+        <div class="modal-warning" id="serialWarning" style="display:none;">
+          <span class="icon-warning modal-warn-icon"></span>
+          <p>Web Serial API is not supported in this browser. Please use <strong>Google Chrome</strong> or <strong>Microsoft Edge</strong> (version 89+).</p>
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+        <button class="btn-primary" id="modalConnectBtn" onclick="connectSerial()">
+          <span class="icon-connect btn-icon"></span>
+          Connect
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main content area — each page section is hidden by default and shown by toggling the .active class via JS -->
+  <main>
+
+    <!-- Dashboard page — the first thing users see, shows all sensor cards, alerts, and an overview chart -->
+    <section id="page-dashboard" class="page active">
+      <div class="page-header fade-in">
+        <div>
+          <p class="page-eyebrow" id="greeting">Good morning</p>
+          <h1 class="page-title">Plant Dashboard</h1>
+          <p class="page-sub">Real-time overview of your plant environment</p>
+        </div>
+        <div class="header-meta">
+          <span class="badge badge-grey" id="systemBadge">Awaiting Device</span>
+          <span class="timestamp" id="dashTimestamp"></span>
+        </div>
+      </div>
+
+      <!-- This banner shows when nothing is connected — it disappears the moment the first packet arrives -->
+      <div class="no-device-banner fade-in" id="noBanner" style="--delay:.04s">
+        <div class="no-device-icon"><span class="icon-usb-large"></span></div>
+        <div class="no-device-text">
+          <strong>No device connected</strong>
+          <p>Connect your Arduino or ESP32 via USB using the <strong>Connect Device</strong> button in the top-right navigation bar to start receiving live sensor data.</p>
+        </div>
+      </div>
+
+      <!-- Sensor cards — one for each of the seven sensors, all start dimmed until a device connects -->
+      <div class="cards-grid fade-in" style="--delay:.08s">
+
+        <div class="sensor-card" id="card-moisture">
+          <div class="card-icon-wrap"><span class="icon-drop card-icon-svg"></span></div>
+          <div class="card-body">
+            <span class="card-label">Soil Moisture</span>
+            <div class="card-value"><span id="val-moisture">—</span><span class="card-unit" id="unit-moisture"></span></div>
+            <div class="card-bar"><div class="card-bar-fill" id="bar-moisture" style="width:0%"></div></div>
+            <span class="card-status" id="status-moisture">No Data</span>
+          </div>
+        </div>
+
+        <div class="sensor-card" id="card-temp">
+          <div class="card-icon-wrap"><span class="icon-thermometer card-icon-svg"></span></div>
+          <div class="card-body">
+            <span class="card-label">Temperature</span>
+            <div class="card-value"><span id="val-temp">—</span><span class="card-unit" id="unit-temp"></span></div>
+            <div class="card-bar"><div class="card-bar-fill" id="bar-temp" style="width:0%"></div></div>
+            <span class="card-status" id="status-temp">No Data</span>
+          </div>
+        </div>
+
+        <div class="sensor-card" id="card-humidity">
+          <div class="card-icon-wrap"><span class="icon-humidity card-icon-svg"></span></div>
+          <div class="card-body">
+            <span class="card-label">Humidity</span>
+            <div class="card-value"><span id="val-humidity">—</span><span class="card-unit" id="unit-humidity"></span></div>
+            <div class="card-bar"><div class="card-bar-fill" id="bar-humidity" style="width:0%"></div></div>
+            <span class="card-status" id="status-humidity">No Data</span>
+          </div>
+        </div>
+
+        <div class="sensor-card" id="card-ph">
+          <div class="card-icon-wrap"><span class="icon-ph card-icon-svg"></span></div>
+          <div class="card-body">
+            <span class="card-label">Soil pH</span>
+            <div class="card-value"><span id="val-ph">—</span><span class="card-unit" id="unit-ph"></span></div>
+            <div class="card-bar"><div class="card-bar-fill" id="bar-ph" style="width:0%"></div></div>
+            <span class="card-status" id="status-ph">No Data</span>
+          </div>
+        </div>
+
+        <div class="sensor-card" id="card-light">
+          <div class="card-icon-wrap"><span class="icon-sun card-icon-svg"></span></div>
+          <div class="card-body">
+            <span class="card-label">Light Intensity</span>
+            <div class="card-value"><span id="val-light">—</span><span class="card-unit" id="unit-light"></span></div>
+            <div class="card-bar"><div class="card-bar-fill" id="bar-light" style="width:0%"></div></div>
+            <span class="card-status" id="status-light">No Data</span>
+          </div>
+        </div>
+
+        <div class="sensor-card" id="card-water">
+          <div class="card-icon-wrap"><span class="icon-reservoir card-icon-svg"></span></div>
+          <div class="card-body">
+            <span class="card-label">Water Level</span>
+            <div class="card-value"><span id="val-water">—</span><span class="card-unit" id="unit-water"></span></div>
+            <div class="card-bar"><div class="card-bar-fill" id="bar-water" style="width:0%"></div></div>
+            <span class="card-status" id="status-water">No Data</span>
+          </div>
+        </div>
+
+        <div class="sensor-card" id="card-pir">
+          <div class="card-icon-wrap"><span class="icon-pir card-icon-svg"></span></div>
+          <div class="card-body">
+            <span class="card-label">PIR Sensor</span>
+            <div class="card-value"><span id="val-pir">—</span></div>
+            <div class="card-bar"><div class="card-bar-fill" id="bar-pir" style="width:0%"></div></div>
+            <span class="card-status" id="status-pir">No Data</span>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="section-label fade-in" style="--delay:.16s">Active Alerts</div>
+      <div class="alerts-panel fade-in" style="--delay:.20s" id="alertsPanel">
+        <div class="alert-none">No device connected — alerts will appear here once your hardware is linked.</div>
+      </div>
+
+      <div class="section-label fade-in" style="--delay:.26s">Today's Overview</div>
+      <div class="chart-card fade-in" style="--delay:.30s" id="dashChartWrap">
+        <div class="chart-empty" id="dashChartEmpty">
+          <span class="icon-chart-empty"></span>
+          <p>Chart data will populate once a device is connected and readings begin coming in.</p>
+        </div>
+        <canvas id="dashChart" height="90" style="display:none;"></canvas>
+      </div>
+    </section>
+
+
+    <!-- Sensor Data page — shows individual trend charts for each sensor plus a real-time readings table -->
+    <section id="page-sensors" class="page">
+      <div class="page-header fade-in">
+        <div>
+          <p class="page-eyebrow">Live Readings</p>
+          <h1 class="page-title">Sensor Data</h1>
+          <p class="page-sub">Trend analysis and individual sensor readings</p>
+        </div>
+        <button class="btn-primary" onclick="refreshSensors()">
+          <span class="icon-refresh btn-icon"></span>
+          Refresh
+        </button>
+      </div>
+
+      <div id="sensorsNoDevice" class="no-device-banner fade-in" style="--delay:.06s">
+        <div class="no-device-icon"><span class="icon-usb-large"></span></div>
+        <div class="no-device-text">
+          <strong>No device connected</strong>
+          <p>Use the <strong>Connect Device</strong> button in the top-right navigation bar to link your microcontroller and view live sensor charts.</p>
+        </div>
+      </div>
+
+      <div id="sensorsContent" style="display:none;">
+        <div class="two-col fade-in" style="--delay:.08s">
+          <div class="chart-card">
+            <div class="chart-title">Soil Moisture &amp; Humidity — 24h</div>
+            <canvas id="moistureHumidityChart" height="180"></canvas>
+          </div>
+          <div class="chart-card">
+            <div class="chart-title">Temperature — 24h</div>
+            <canvas id="tempChart" height="180"></canvas>
+          </div>
+        </div>
+        <div class="two-col fade-in" style="--delay:.16s">
+          <div class="chart-card">
+            <div class="chart-title">Light Intensity — 24h</div>
+            <canvas id="lightChart" height="180"></canvas>
+          </div>
+          <div class="chart-card">
+            <div class="chart-title">Soil pH — 24h</div>
+            <canvas id="phChart" height="180"></canvas>
+          </div>
+        </div>
+        <div class="section-label fade-in" style="--delay:.24s">Real-Time Readings</div>
+        <div class="table-card fade-in" style="--delay:.28s">
+          <table class="data-table">
+            <thead>
+              <tr><th>Sensor</th><th>Current Value</th><th>Min (session)</th><th>Max (session)</th><th>Status</th></tr>
+            </thead>
+            <tbody id="sensorTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- Power and Solar page — shows battery and solar ring charts plus power notifications -->
+    <section id="page-power" class="page">
+      <div class="page-header fade-in">
+        <div>
+          <p class="page-eyebrow">Energy Management</p>
+          <h1 class="page-title">Power &amp; Solar Status</h1>
+          <p class="page-sub">Battery level, solar input, and energy overview</p>
+        </div>
+        <span class="badge" id="powerBadge" style="background:rgba(1,31,75,0.08);color:var(--soft);border:1px solid var(--border);">Awaiting Device</span>
+      </div>
+
+      <div id="powerNoDevice" class="no-device-banner fade-in" style="--delay:.06s">
+        <div class="no-device-icon"><span class="icon-usb-large"></span></div>
+        <div class="no-device-text">
+          <strong>No device connected</strong>
+          <p>Power and solar data will display once your microcontroller is sending readings. Include <code>battery</code> and <code>solar</code> fields in your JSON output.</p>
+        </div>
+      </div>
+
+      <div id="powerContent" style="display:none;">
+        <div class="power-grid fade-in" style="--delay:.08s">
+          <div class="power-card">
+            <div class="power-card-icon"><span class="icon-battery-large"></span></div>
+            <div class="power-label">Battery Level</div>
+            <div class="power-ring-wrap">
+              <svg class="power-ring" viewBox="0 0 120 120">
+                <circle cx="60" cy="60" r="50" class="ring-track"/>
+                <circle cx="60" cy="60" r="50" class="ring-fill ring-battery" id="batteryRing"/>
+              </svg>
+              <div class="power-ring-label">
+                <span class="power-big" id="batteryVal">—</span>
+                <span class="power-unit" id="batteryUnit"></span>
+              </div>
+            </div>
+            <div class="power-meta" id="batteryMeta">Waiting for data</div>
+          </div>
+
+          <div class="power-card">
+            <div class="power-card-icon"><span class="icon-solar-large"></span></div>
+            <div class="power-label">Solar Input</div>
+            <div class="power-ring-wrap">
+              <svg class="power-ring" viewBox="0 0 120 120">
+                <circle cx="60" cy="60" r="50" class="ring-track"/>
+                <circle cx="60" cy="60" r="50" class="ring-fill ring-solar" id="solarRing"/>
+              </svg>
+              <div class="power-ring-label">
+                <span class="power-big" id="solarVal">—</span>
+                <span class="power-unit" id="solarUnit"></span>
+              </div>
+            </div>
+            <div class="power-meta">Peak capacity: 6W</div>
+          </div>
+
+          <div class="power-card">
+            <div class="power-card-icon"><span class="icon-clock-large"></span></div>
+            <div class="power-label">Estimated Runtime</div>
+            <div class="power-ring-wrap">
+              <svg class="power-ring" viewBox="0 0 120 120">
+                <circle cx="60" cy="60" r="50" class="ring-track"/>
+                <circle cx="60" cy="60" r="50" class="ring-fill ring-runtime" id="runtimeRing"/>
+              </svg>
+              <div class="power-ring-label">
+                <span class="power-big" id="runtimeVal">—</span>
+                <span class="power-unit" id="runtimeUnit"></span>
+              </div>
+            </div>
+            <div class="power-meta">Without solar input</div>
+          </div>
+        </div>
+
+        <div class="section-label fade-in" style="--delay:.18s">Solar &amp; Battery Trend</div>
+        <div class="chart-card fade-in" style="--delay:.22s">
+          <canvas id="powerChart" height="90"></canvas>
+        </div>
+
+        <div class="section-label fade-in" style="--delay:.28s">Power Notifications</div>
+        <div class="alerts-panel fade-in" style="--delay:.32s" id="powerAlerts">
+          <div class="alert-none">No power alerts — waiting for live data.</div>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- History page — logs every reading from the current session, shows averages and a full data table -->
+    <section id="page-history" class="page">
+      <div class="page-header fade-in">
+        <div>
+          <p class="page-eyebrow">Records &amp; Reports</p>
+          <h1 class="page-title">Historical Data</h1>
+          <p class="page-sub">Session log and export options</p>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+          <button class="btn-primary" id="exportBtn" onclick="exportCSV()" disabled>
+            <span class="icon-download btn-icon"></span>
+            Export CSV
+          </button>
+        </div>
+      </div>
+
+      <div id="historyNoDevice" class="no-device-banner fade-in" style="--delay:.06s">
+        <div class="no-device-icon"><span class="icon-usb-large"></span></div>
+        <div class="no-device-text">
+          <strong>No session data yet</strong>
+          <p>Historical readings will be recorded here as soon as a device is connected and data begins streaming in.</p>
+        </div>
+      </div>
+
+      <div id="historyContent" style="display:none;">
+        <div class="chart-card fade-in" style="--delay:.08s">
+          <div class="chart-title">Sensor Readings — Session</div>
+          <canvas id="historyChart" height="110"></canvas>
+        </div>
+
+        <div class="section-label fade-in" style="--delay:.18s">Session Summary</div>
+        <div class="summary-grid fade-in" style="--delay:.22s">
+          <div class="summary-card">
+            <div class="summary-icon-wrap"><span class="icon-drop summary-icon"></span></div>
+            <div class="summary-title">Avg Soil Moisture</div>
+            <div class="summary-value" id="avg-moisture">—</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-icon-wrap"><span class="icon-thermometer summary-icon"></span></div>
+            <div class="summary-title">Avg Temperature</div>
+            <div class="summary-value" id="avg-temp">—</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-icon-wrap"><span class="icon-sun summary-icon"></span></div>
+            <div class="summary-title">Avg Light</div>
+            <div class="summary-value" id="avg-light">—</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-icon-wrap"><span class="icon-ph summary-icon"></span></div>
+            <div class="summary-title">Avg Soil pH</div>
+            <div class="summary-value" id="avg-ph">—</div>
+          </div>
+        </div>
+
+        <div class="section-label fade-in" style="--delay:.30s">Data Log</div>
+        <div class="table-card fade-in" style="--delay:.34s">
+          <table class="data-table">
+            <thead>
+              <tr><th>Time</th><th>Moisture</th><th>Temp (°C)</th><th>Humidity</th><th>pH</th><th>Light (lux)</th><th>Water Lvl</th></tr>
+            </thead>
+            <tbody id="historyTableBody">
+              <tr><td colspan="7" style="text-align:center;color:var(--soft);font-style:italic;padding:24px;">No session data yet</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- About page — explains the system, the connection steps, how each sensor works, and the sustainability angle -->
+    <section id="page-about" class="page">
+      <div class="page-header fade-in">
+        <div>
+          <p class="page-eyebrow">System Info</p>
+          <h1 class="page-title">About LeafLink</h1>
+          <p class="page-sub">IoT-Based Multi-Sensor Plant Monitoring and Preservation System</p>
+        </div>
+      </div>
+
+      <div class="about-hero fade-in" style="--delay:.08s">
+        <div class="about-hero-text">
+          <h2>Smart. Sustainable. Scalable.</h2>
+          <p>LeafLink is an intelligent IoT system that monitors and preserves plant health by combining multiple environmental sensors, solar-powered hardware, and a clean web dashboard — giving growers real-time insights from anywhere in the world.</p>
+          <p style="margin-top:14px;">By automating environmental monitoring, LeafLink reduces guesswork, prevents over- or under-watering, and promotes healthier plants with lower resource usage.</p>
+        </div>
+        <div class="about-hero-visual">
+          <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="100" cy="100" r="88" fill="none" stroke="#005b96" stroke-width="1" stroke-dasharray="5 4" opacity=".45"/>
+            <circle cx="100" cy="100" r="62" fill="rgba(0,91,150,0.06)" stroke="#005b96" stroke-width="1" opacity=".55"/>
+            <circle cx="100" cy="100" r="36" fill="rgba(0,91,150,0.12)" stroke="#005b96" stroke-width="1"/>
+            <path d="M100 65 C74 86 72 116 100 132 C128 116 126 86 100 65z" fill="#005b96" opacity=".72"/>
+            <line x1="100" y1="132" x2="100" y2="158" stroke="#005b96" stroke-width="2.4" stroke-linecap="round"/>
+            <line x1="88" y1="150" x2="100" y2="158" stroke="#005b96" stroke-width="1.8" stroke-linecap="round"/>
+            <line x1="112" y1="150" x2="100" y2="158" stroke="#005b96" stroke-width="1.8" stroke-linecap="round"/>
+            <circle cx="52" cy="60" r="3" fill="#6497b1" opacity=".55"/>
+            <circle cx="148" cy="60" r="3" fill="#6497b1" opacity=".55"/>
+            <circle cx="40" cy="110" r="2.5" fill="#6497b1" opacity=".4"/>
+            <circle cx="160" cy="110" r="2.5" fill="#6497b1" opacity=".4"/>
+          </svg>
+        </div>
+      </div>
+
+      <div class="section-label fade-in" style="--delay:.14s">Microcontroller Connection Guide</div>
+      <div class="connection-guide fade-in" style="--delay:.18s">
+        <div class="guide-step">
+          <div class="guide-num">01</div>
+          <div class="guide-content">
+            <div class="guide-title">Upload LeafLink Firmware</div>
+            <p>Flash your Arduino or ESP32 with the LeafLink firmware. The device must output JSON sensor packets over serial.</p>
+            <div class="code-block" style="margin-top:12px;">
+<pre>// Arduino / ESP32 — Minimal Output
+void loop() {
+  Serial.print("{\"moisture\":");
+  Serial.print(analogRead(A0) / 10.24);
+  Serial.print(",\"temp\":");
+  Serial.print(dht.readTemperature());
+  Serial.print(",\"humidity\":");
+  Serial.print(dht.readHumidity());
+  Serial.print(",\"ph\":");
+  Serial.print(readPH());
+  Serial.print(",\"light\":");
+  Serial.print(lightMeter.readLightLevel());
+  Serial.print(",\"water\":");
+  Serial.print(getWaterLevel());
+  Serial.print(",\"pir\":");
+  Serial.print(digitalRead(PIR_PIN));
+  // Optional power fields:
+  Serial.print(",\"battery\":");
+  Serial.print(getBatteryPct());
+  Serial.print(",\"solar\":");
+  Serial.print(getSolarWatts());
+  Serial.println("}");
+  delay(2000);
+}</pre>
+            </div>
+          </div>
+        </div>
+        <div class="guide-step">
+          <div class="guide-num">02</div>
+          <div class="guide-content">
+            <div class="guide-title">Use Google Chrome or Microsoft Edge</div>
+            <p>LeafLink uses the <strong>Web Serial API</strong> to communicate with your microcontroller directly from the browser. This is only supported in Chrome and Edge (version 89+). Firefox and Safari do not support it.</p>
+          </div>
+        </div>
+        <div class="guide-step">
+          <div class="guide-num">03</div>
+          <div class="guide-content">
+            <div class="guide-title">Click "Connect Device" in the Nav Bar</div>
+            <p>Press the <strong>Connect Device</strong> button at the top right. Set your baud rate to match the one in your firmware, then click Connect. Your browser will show a port picker — select your device (usually listed as "USB Serial", "CH340", or "CP2102").</p>
+          </div>
+        </div>
+        <div class="guide-step">
+          <div class="guide-num">04</div>
+          <div class="guide-content">
+            <div class="guide-title">Live Data Streams In</div>
+            <p>Once connected, the dashboard populates with real data from your hardware. The nav bar turns green and all sensor cards, charts, and alerts update automatically with each packet received from your device.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-label fade-in" style="--delay:.24s">How the Sensors Work</div>
+      <div class="sensor-info-grid fade-in" style="--delay:.28s">
+        <div class="sensor-info-card">
+          <div class="si-icon-wrap"><span class="icon-drop si-icon"></span></div>
+          <div class="si-title">Soil Moisture Sensor</div>
+          <p>Measures volumetric water content using electrical resistance between two probes. Triggers watering alerts when levels fall below the configured threshold.</p>
+        </div>
+        <div class="sensor-info-card">
+          <div class="si-icon-wrap"><span class="icon-thermometer si-icon"></span></div>
+          <div class="si-title">DHT22 — Temp &amp; Humidity</div>
+          <p>Capacitive humidity sensor combined with a thermistor. Provides accurate environmental readings every 2 seconds to ensure optimal plant comfort.</p>
+        </div>
+        <div class="sensor-info-card">
+          <div class="si-icon-wrap"><span class="icon-ph si-icon"></span></div>
+          <div class="si-title">pH Sensor</div>
+          <p>Electrochemical sensor measuring hydrogen ion activity in soil. Optimal plant growth occurs between pH 6.0–7.0; alerts fire outside this range.</p>
+        </div>
+        <div class="sensor-info-card">
+          <div class="si-icon-wrap"><span class="icon-sun si-icon"></span></div>
+          <div class="si-title">BH1750 Light Sensor</div>
+          <p>Measures ambient light in lux. Helps determine whether plants receive adequate sunlight for photosynthesis and optimal growth cycles.</p>
+        </div>
+        <div class="sensor-info-card">
+          <div class="si-icon-wrap"><span class="icon-ultrasonic si-icon"></span></div>
+          <div class="si-title">Ultrasonic Sensor (HC-SR04)</div>
+          <p>Uses reflected sound waves to measure the distance to the water surface in a reservoir, providing real-time water level percentage readings.</p>
+        </div>
+        <div class="sensor-info-card">
+          <div class="si-icon-wrap"><span class="icon-pir si-icon"></span></div>
+          <div class="si-title">PIR Motion Sensor</div>
+          <p>Detects infrared radiation changes caused by human or animal movement. Used for proximity security monitoring and interaction event logging.</p>
+        </div>
+      </div>
+
+      <div class="sustain-block fade-in" style="--delay:.36s">
+        <div class="sustain-icon-wrap"><span class="icon-leaf sustain-icon"></span></div>
+        <div>
+          <h3>Sustainability Focus</h3>
+          <p>LeafLink is powered by a solar panel with battery backup, minimizing its carbon footprint. By providing precise sensor data, it reduces water waste — only triggering irrigation when truly needed — supporting eco-conscious plant care at home, in greenhouses, and at scale in agriculture.</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Footer — just the brand name, a short description, and the copyright line -->
+  <footer>
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <span class="icon-leaf footer-leaf"></span>
+        LeafLink
+      </div>
+      <p class="footer-text">IoT-Based Multi-Sensor Plant Monitoring &amp; Preservation System</p>
+      <p class="footer-copy">&copy; 2025 LeafLink System &middot; Built for smart, sustainable plant care</p>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>

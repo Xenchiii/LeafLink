@@ -1,0 +1,955 @@
+/* LeafLink — styles.css
+   All the visual styling for the dashboard. We're using Montserrat for
+   headings, Roboto for labels and subheadings, Open Sans for body text,
+   and Roboto Mono for numbers and small UI labels. Every icon in here is
+   drawn purely with CSS — no images, no emoji, no SVG imports. */
+
+
+/* These custom properties are the single source of truth for every color,
+   shadow, and spacing value used across the whole dashboard. Change one
+   here and it updates everywhere automatically. */
+:root {
+  --primary:   #011f4b;
+  --secondary: #03396c;
+  --accent:    #005b96;
+  --bg:        #b3cde0;
+  --soft:      #6497b1;
+  --white:     #f4f8fc;
+  --card-bg:   rgba(244,248,252,0.84);
+  --border:    rgba(1,31,75,0.10);
+  --shadow-sm: 0 2px 12px rgba(1,31,75,0.08);
+  --shadow-md: 0 4px 28px rgba(1,31,75,0.13);
+  --shadow-lg: 0 8px 48px rgba(1,31,75,0.20);
+  --radius:    14px;
+  --radius-sm: 9px;
+  --nav-h:     68px;
+  --pad:       44px;
+  --tr:        0.26s cubic-bezier(0.4,0,0.2,1);
+}
+
+*,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+html { scroll-behavior:smooth; }
+
+body {
+  font-family:'Open Sans','Roboto',sans-serif;
+  font-size:16px; font-weight:400;
+  background:var(--bg); color:var(--primary);
+  min-height:100vh; overflow-x:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+
+/* Typography scale following the spec — Montserrat for big headings,
+   Roboto for mid-level text, Open Sans for paragraphs */
+h1 { font-family:'Montserrat',sans-serif; font-weight:700; font-size:32px; color:var(--primary); line-height:1.15; }
+h2 { font-family:'Montserrat',sans-serif; font-weight:600; font-size:26px; color:var(--primary); line-height:1.2; }
+h3 { font-family:'Roboto',sans-serif; font-weight:500; font-size:18px; color:var(--secondary); line-height:1.3; }
+p  { font-family:'Open Sans',sans-serif; font-weight:400; font-size:15px; color:var(--accent); line-height:1.68; }
+strong { font-weight:600; }
+code,pre { font-family:'Roboto Mono','Courier New',monospace; font-size:13px; }
+
+
+/* Keyframe animations used throughout the page.
+   pulseGreen and pulseAmber are for the nav status dot.
+   fadeInUp is used on .fade-in elements as sections come into view.
+   barGrow makes the sensor progress bars animate in from zero.
+   modalIn gives the connection dialog a subtle entrance. */
+
+@keyframes pulseGreen {
+  0%,100% { box-shadow:0 0 0 3px rgba(74,222,128,0.28); }
+  50%      { box-shadow:0 0 0 7px rgba(74,222,128,0.06); }
+}
+@keyframes pulseAmber {
+  0%,100% { box-shadow:0 0 0 3px rgba(251,191,36,0.30); }
+  50%      { box-shadow:0 0 0 7px rgba(251,191,36,0.06); }
+}
+@keyframes fadeInUp {
+  from { opacity:0; transform:translateY(16px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+@keyframes barGrow { from { width:0 !important; } }
+@keyframes modalIn {
+  from { opacity:0; transform:translateY(22px) scale(0.97); }
+  to   { opacity:1; transform:translateY(0)    scale(1); }
+}
+
+.fade-in {
+  animation:fadeInUp 0.46s ease both;
+  animation-delay:var(--delay,0s);
+}
+
+
+/* Every icon below is drawn with ::before and ::after pseudo-elements.
+   No images are loaded. Each class is named after what it represents
+   and uses borders, box-shadows, and clip-path to form the shape. */
+
+/* The nav logo leaf — a rotated teardrop shape with a stem underneath */
+.icon-leaf { display:inline-block; position:relative; width:20px; height:22px; }
+.icon-leaf::before {
+  content:''; position:absolute; top:0; left:3px;
+  width:14px; height:17px;
+  background:var(--soft);
+  border-radius:50% 100% 50% 0;
+  transform:rotate(15deg);
+}
+.icon-leaf::after {
+  content:''; position:absolute; bottom:0; left:8px;
+  width:2px; height:8px;
+  background:var(--soft); border-radius:1px;
+}
+
+/* Water drop — a circle at the bottom with a triangle pointing up */
+.icon-drop { display:inline-block; position:relative; width:16px; height:20px; }
+.icon-drop::before {
+  content:''; position:absolute; bottom:0; left:50%;
+  transform:translateX(-50%);
+  width:14px; height:14px; background:currentColor; border-radius:50%;
+}
+.icon-drop::after {
+  content:''; position:absolute; top:0; left:50%;
+  transform:translateX(-50%);
+  width:0; height:0;
+  border-left:7px solid transparent;
+  border-right:7px solid transparent;
+  border-bottom:9px solid currentColor;
+}
+
+/* Thermometer — a thin tube on top with a bulb at the bottom */
+.icon-thermometer { display:inline-block; position:relative; width:14px; height:22px; }
+.icon-thermometer::before {
+  content:''; position:absolute; top:0; left:50%; transform:translateX(-50%);
+  width:6px; height:14px; background:currentColor; border-radius:3px 3px 0 0;
+}
+.icon-thermometer::after {
+  content:''; position:absolute; bottom:0; left:50%; transform:translateX(-50%);
+  width:12px; height:12px; background:currentColor; border-radius:50%;
+}
+
+/* Humidity — two open arcs stacked, giving a layered wave effect */
+.icon-humidity { display:inline-block; position:relative; width:18px; height:16px; }
+.icon-humidity::before {
+  content:''; position:absolute; top:0; left:0;
+  width:18px; height:8px;
+  border:2px solid currentColor; border-bottom:none; border-radius:9px 9px 0 0;
+}
+.icon-humidity::after {
+  content:''; position:absolute; bottom:0; left:2px;
+  width:14px; height:8px;
+  border:2px solid currentColor; border-top:none; border-radius:0 0 7px 7px;
+}
+
+/* pH — a circle with the letters "pH" inside, drawn via content */
+.icon-ph { display:inline-block; position:relative; width:20px; height:20px; line-height:0; }
+.icon-ph::before {
+  content:'pH'; position:absolute; inset:0;
+  display:flex; align-items:center; justify-content:center;
+  font-family:'Roboto Mono',monospace; font-size:7px; font-weight:600;
+  color:currentColor; border:2px solid currentColor; border-radius:50%; line-height:1;
+}
+
+/* Sun — a small filled circle with eight box-shadow dots radiating outward */
+.icon-sun { display:inline-block; position:relative; width:20px; height:20px; }
+.icon-sun::before {
+  content:''; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+  width:8px; height:8px; background:currentColor; border-radius:50%;
+  box-shadow:
+    0 -8px 0 1.5px currentColor, 0 8px 0 1.5px currentColor,
+    -8px 0 0 1.5px currentColor, 8px 0 0 1.5px currentColor,
+    -5.5px -5.5px 0 1.5px currentColor, 5.5px -5.5px 0 1.5px currentColor,
+    -5.5px 5.5px 0 1.5px currentColor, 5.5px 5.5px 0 1.5px currentColor;
+}
+
+/* Reservoir — a square outline with a semi-transparent fill inside to show water */
+.icon-reservoir { display:inline-block; position:relative; width:16px; height:20px; }
+.icon-reservoir::before {
+  content:''; position:absolute; bottom:0; left:0;
+  width:16px; height:16px; border:2px solid currentColor; border-radius:2px;
+}
+.icon-reservoir::after {
+  content:''; position:absolute; bottom:2px; left:2px;
+  width:10px; height:8px; background:currentColor; opacity:0.45; border-radius:1px;
+}
+
+/* PIR — two concentric half-circle arcs to represent a detection field */
+.icon-pir { display:inline-block; position:relative; width:20px; height:14px; }
+.icon-pir::before {
+  content:''; position:absolute; top:0; left:0;
+  width:20px; height:20px;
+  border:2px solid currentColor; border-bottom:none; border-radius:10px 10px 0 0;
+}
+.icon-pir::after {
+  content:''; position:absolute; top:4px; left:4px;
+  width:12px; height:12px;
+  border:2px solid currentColor; border-bottom:none; border-radius:6px 6px 0 0;
+}
+
+/* Ultrasonic — a trapezoid body representing a transducer with side wave arcs */
+.icon-ultrasonic { display:inline-block; position:relative; width:20px; height:16px; }
+.icon-ultrasonic::before {
+  content:''; position:absolute; top:2px; left:6px;
+  width:8px; height:12px;
+  background:currentColor;
+  clip-path:polygon(20% 0%,80% 0%,100% 100%,0% 100%);
+  opacity:0.8;
+}
+.icon-ultrasonic::after {
+  content:''; position:absolute; top:0; left:0;
+  width:6px; height:10px;
+  border-left:2px solid currentColor; border-right:2px solid currentColor;
+  border-radius:50%; opacity:0.5;
+}
+
+/* USB connector — a rectangular head at the bottom and a pronged fork at the top */
+.icon-usb { display:inline-block; position:relative; width:16px; height:16px; }
+.icon-usb::before {
+  content:''; position:absolute; bottom:0; left:50%; transform:translateX(-50%);
+  width:8px; height:10px; border:2px solid currentColor; border-radius:1px;
+}
+.icon-usb::after {
+  content:''; position:absolute; top:0; left:50%; transform:translateX(-50%);
+  width:2px; height:7px; background:currentColor;
+  box-shadow:-3px 3px 0 0 currentColor, 3px 3px 0 0 currentColor;
+}
+
+/* A larger version of the USB icon used in the no-device banners */
+.icon-usb-large { display:inline-block; position:relative; width:32px; height:32px; }
+.icon-usb-large::before {
+  content:''; position:absolute; bottom:2px; left:50%; transform:translateX(-50%);
+  width:16px; height:20px; border:3px solid currentColor; border-radius:2px;
+}
+.icon-usb-large::after {
+  content:''; position:absolute; top:2px; left:50%; transform:translateX(-50%);
+  width:4px; height:13px; background:currentColor;
+  box-shadow:-5px 6px 0 0 currentColor, 5px 6px 0 0 currentColor;
+}
+
+/* Close button X — two rotated bars crossing each other */
+.icon-close { display:inline-block; position:relative; width:14px; height:14px; }
+.icon-close::before,.icon-close::after {
+  content:''; position:absolute; top:50%; left:0;
+  width:14px; height:2px; background:currentColor; border-radius:1px;
+}
+.icon-close::before { transform:rotate(45deg); }
+.icon-close::after  { transform:rotate(-45deg); }
+
+/* A small plug icon used on the Connect button inside the modal */
+.icon-connect { display:inline-block; position:relative; width:13px; height:13px; }
+.icon-connect::before {
+  content:''; position:absolute; top:1px; left:1px;
+  width:7px; height:7px; border:2px solid currentColor; border-radius:50%;
+}
+.icon-connect::after {
+  content:''; position:absolute; bottom:0; right:0;
+  width:6px; height:2px; background:currentColor;
+  transform:rotate(45deg); transform-origin:right center;
+  box-shadow:0 -3px 0 0 currentColor;
+}
+
+/* Circular arrow for the refresh button */
+.icon-refresh { display:inline-block; position:relative; width:14px; height:14px; }
+.icon-refresh::before {
+  content:''; position:absolute; inset:0;
+  border:2px solid currentColor; border-top-color:transparent; border-radius:50%;
+}
+.icon-refresh::after {
+  content:''; position:absolute; top:-1px; right:1px;
+  width:0; height:0;
+  border-left:4px solid transparent; border-right:4px solid transparent;
+  border-bottom:5px solid currentColor; transform:rotate(30deg);
+}
+
+/* Download arrow — a vertical bar with a downward-pointing triangle and a baseline */
+.icon-download { display:inline-block; position:relative; width:13px; height:14px; }
+.icon-download::before {
+  content:''; position:absolute; top:0; left:50%; transform:translateX(-50%);
+  width:2px; height:7px; background:currentColor;
+}
+.icon-download::after {
+  content:''; position:absolute; top:5px; left:50%; transform:translateX(-50%);
+  width:0; height:0;
+  border-left:5px solid transparent; border-right:5px solid transparent;
+  border-top:5px solid currentColor;
+  box-shadow:0 5px 0 0 currentColor;
+}
+
+/* Warning triangle — a border-trick triangle with an exclamation mark inside */
+.icon-warning { display:inline-block; position:relative; width:16px; height:14px; }
+.icon-warning::before {
+  content:''; position:absolute; bottom:0; left:50%; transform:translateX(-50%);
+  width:0; height:0;
+  border-left:8px solid transparent; border-right:8px solid transparent;
+  border-bottom:14px solid currentColor;
+}
+.icon-warning::after {
+  content:'!'; position:absolute; bottom:2px; left:50%; transform:translateX(-50%);
+  font-family:'Roboto Mono',monospace; font-size:8px; font-weight:700;
+  color:var(--white); line-height:1;
+}
+
+/* Info icon — a circle with an "i" in the center */
+.icon-alert-info { display:inline-block; position:relative; width:16px; height:16px; }
+.icon-alert-info::before {
+  content:''; position:absolute; inset:0; border:2px solid currentColor; border-radius:50%;
+}
+.icon-alert-info::after {
+  content:'i'; position:absolute; inset:0;
+  font-family:'Roboto Mono',monospace; font-size:8px; font-weight:700;
+  color:currentColor; text-align:center; line-height:14px;
+}
+
+/* Success checkmark — a circle with a small rotated tick inside */
+.icon-alert-success { display:inline-block; position:relative; width:16px; height:16px; }
+.icon-alert-success::before {
+  content:''; position:absolute; inset:0; border:2px solid currentColor; border-radius:50%;
+}
+.icon-alert-success::after {
+  content:''; position:absolute; top:4px; left:3px;
+  width:7px; height:4px;
+  border-left:2px solid currentColor; border-bottom:2px solid currentColor;
+  transform:rotate(-45deg);
+}
+
+/* Chart placeholder bars shown when no device is connected yet */
+.icon-chart-empty { display:inline-block; position:relative; width:40px; height:30px; }
+.icon-chart-empty::before {
+  content:''; position:absolute; bottom:0; left:0;
+  width:6px; height:18px; background:var(--border); border-radius:2px 2px 0 0;
+  box-shadow:10px 6px 0 0 var(--border), 20px 12px 0 0 var(--border), 30px 3px 0 0 var(--border);
+}
+.icon-chart-empty::after {
+  content:''; position:absolute; bottom:0; left:0;
+  width:40px; height:2px; background:var(--border); border-radius:1px;
+}
+
+/* Battery icon — a rectangle with a small terminal nub on the right */
+.icon-battery-large { display:inline-block; position:relative; width:28px; height:16px; }
+.icon-battery-large::before {
+  content:''; position:absolute; top:0; left:0;
+  width:24px; height:16px; border:2px solid var(--accent); border-radius:3px;
+}
+.icon-battery-large::after {
+  content:''; position:absolute; top:4px; right:0;
+  width:4px; height:8px; background:var(--accent); border-radius:0 2px 2px 0;
+}
+
+/* Solar panel icon — a circle center with eight evenly-spaced rays via box-shadow */
+.icon-solar-large { display:inline-block; position:relative; width:28px; height:28px; }
+.icon-solar-large::before {
+  content:''; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+  width:11px; height:11px; background:var(--accent); border-radius:50%;
+}
+.icon-solar-large::after {
+  content:''; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+  width:11px; height:11px; border-radius:50%;
+  box-shadow:
+    0 -11px 0 1.5px var(--accent), 0 11px 0 1.5px var(--accent),
+    -11px 0 0 1.5px var(--accent), 11px 0 0 1.5px var(--accent),
+    -7.5px -7.5px 0 1.5px var(--accent), 7.5px -7.5px 0 1.5px var(--accent),
+    -7.5px 7.5px 0 1.5px var(--accent), 7.5px 7.5px 0 1.5px var(--accent);
+}
+
+/* Clock icon — a circle outline with two hand-like bars inside */
+.icon-clock-large { display:inline-block; position:relative; width:24px; height:24px; }
+.icon-clock-large::before {
+  content:''; position:absolute; inset:0;
+  border:2px solid var(--soft); border-radius:50%;
+}
+.icon-clock-large::after {
+  content:''; position:absolute; top:4px; left:50%; transform:translateX(-50%) rotate(20deg);
+  transform-origin:bottom center;
+  width:2px; height:8px; background:var(--soft);
+  box-shadow:3px 1px 0 0 var(--soft);
+}
+
+/* Sizing wrappers for the icons used inside summary cards */
+.summary-icon-wrap {
+  width:36px; height:36px; background:rgba(0,91,150,0.10);
+  border-radius:10px; display:flex; align-items:center; justify-content:center; margin-bottom:6px;
+}
+.summary-icon { color:var(--accent); }
+
+/* Sizing wrappers for the icons used inside sensor info cards on the About page */
+.si-icon-wrap {
+  width:42px; height:42px; background:rgba(0,91,150,0.10);
+  border-radius:11px; display:flex; align-items:center; justify-content:center; margin-bottom:10px;
+}
+.si-icon { color:var(--accent); }
+
+/* The sustainability block icon at the bottom of the About page */
+.sustain-icon-wrap {
+  width:52px; height:52px; min-width:52px;
+  background:rgba(0,91,150,0.12); border-radius:14px;
+  display:flex; align-items:center; justify-content:center;
+}
+.sustain-icon { color:var(--accent); transform:scale(1.5); }
+
+
+/* The navigation bar is fixed to the top and stays visible while scrolling */
+nav {
+  position:fixed; top:0; left:0; right:0; z-index:100;
+  background:var(--primary); height:var(--nav-h);
+  display:flex; align-items:center;
+  padding:0 36px; gap:16px;
+  box-shadow:0 2px 24px rgba(1,31,75,0.32);
+}
+.nav-left  { flex-shrink:0; }
+.nav-right { display:flex; align-items:center; gap:12px; flex-shrink:0; margin-left:auto; }
+
+.nav-brand {
+  display:flex; align-items:center; gap:10px;
+  font-family:'Montserrat',sans-serif; font-size:1.28rem; font-weight:700;
+  color:var(--white); letter-spacing:0.03em; text-decoration:none;
+}
+.nav-brand-icon { transform:scale(1.1); }
+
+.nav-links {
+  display:flex; align-items:center; gap:4px;
+  list-style:none; flex:1; justify-content:center;
+}
+.nav-links li button {
+  background:none; border:none; cursor:pointer;
+  font-family:'Roboto',sans-serif; font-size:0.84rem; font-weight:500;
+  letter-spacing:0.03em; color:rgba(244,248,252,0.56);
+  padding:7px 14px; border-radius:8px; transition:var(--tr); white-space:nowrap;
+}
+.nav-links li button:hover  { color:var(--white); background:rgba(100,151,177,0.18); }
+.nav-links li button.active { color:var(--white); background:rgba(0,91,150,0.34); }
+
+/* The small pill in the nav showing connection state */
+.device-status {
+  display:flex; align-items:center; gap:7px;
+  padding:5px 12px;
+  background:rgba(255,255,255,0.07);
+  border:1px solid rgba(255,255,255,0.09);
+  border-radius:20px;
+}
+
+/* The colored dot that pulses when connected */
+.status-dot {
+  width:8px; height:8px; border-radius:50%; flex-shrink:0;
+  background:#4b5563; transition:var(--tr);
+}
+.status-dot.connected    { background:#4ade80; animation:pulseGreen 2.2s infinite; }
+.status-dot.connecting   { background:#f59e0b; animation:pulseAmber 1s infinite; }
+.status-dot.disconnected { background:#ef4444; }
+
+.status-label {
+  font-family:'Roboto Mono',monospace; font-size:0.72rem; font-weight:500;
+  color:rgba(244,248,252,0.58); white-space:nowrap;
+}
+
+/* The main Connect/Disconnect button in the nav */
+.btn-connect {
+  display:flex; align-items:center; gap:7px;
+  background:var(--secondary); border:none; cursor:pointer;
+  font-family:'Montserrat',sans-serif; font-size:0.78rem; font-weight:600;
+  letter-spacing:0.04em; color:var(--white);
+  padding:8px 16px; border-radius:8px; transition:var(--tr); white-space:nowrap;
+}
+.btn-connect:hover     { background:var(--accent); transform:translateY(-1px); }
+.btn-connect.connected { background:#166534; }
+.btn-connect .icon-usb { color:var(--white); }
+
+
+/* The connection modal overlay — sits on top of everything with a blurred backdrop */
+.modal-overlay {
+  position:fixed; inset:0; z-index:200;
+  background:rgba(1,10,28,0.65); backdrop-filter:blur(6px);
+  display:none; align-items:center; justify-content:center; padding:20px;
+}
+.modal-overlay.open { display:flex; }
+
+.modal {
+  background:var(--white); border-radius:var(--radius);
+  width:100%; max-width:620px; max-height:90vh; overflow-y:auto;
+  box-shadow:var(--shadow-lg);
+  animation:modalIn 0.26s ease both;
+}
+.modal-header {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:22px 28px 16px; border-bottom:1px solid var(--border);
+}
+.modal-title-row { display:flex; align-items:center; gap:12px; }
+.modal-title-row h2 { font-size:1.20rem; }
+.modal-icon { color:var(--accent); transform:scale(1.3); }
+.modal-close {
+  background:none; border:none; cursor:pointer;
+  width:30px; height:30px; display:flex; align-items:center; justify-content:center;
+  border-radius:6px; transition:var(--tr); color:var(--soft);
+}
+.modal-close:hover { background:rgba(1,31,75,0.06); color:var(--primary); }
+.modal-body { padding:20px 28px; }
+.modal-section { margin-bottom:22px; }
+.modal-section h3 {
+  margin-bottom:12px;
+  font-family:'Roboto',sans-serif;
+  font-size:0.76rem; font-weight:600;
+  letter-spacing:0.08em; text-transform:uppercase; color:var(--secondary);
+}
+.form-row { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+.form-group { display:flex; flex-direction:column; gap:5px; }
+.form-group label { font-family:'Roboto',sans-serif; font-size:0.78rem; font-weight:500; color:var(--soft); }
+
+/* Code blocks used in the modal and About page */
+.code-block {
+  background:rgba(1,31,75,0.05); border:1px solid var(--border);
+  border-radius:8px; padding:14px 16px; overflow-x:auto;
+}
+.code-block pre { color:var(--secondary); white-space:pre; line-height:1.55; }
+.modal-note { margin-top:10px; font-size:0.82rem; color:var(--soft); line-height:1.55; }
+.modal-note code {
+  background:rgba(0,91,150,0.10); padding:1px 6px; border-radius:4px; color:var(--accent);
+}
+
+/* The serial monitor log inside the modal */
+.serial-log {
+  background:var(--primary); border-radius:8px; padding:12px 14px;
+  height:140px; overflow-y:auto;
+  font-family:'Roboto Mono',monospace; font-size:0.75rem; color:#b3cde0; line-height:1.60;
+}
+.serial-log .log-line { color:#f4f8fc; }
+.serial-log .log-err  { color:#f87171; }
+.serial-log .log-ok   { color:#4ade80; }
+
+/* Warning banner shown inside the modal if the browser doesn't support Web Serial */
+.modal-warning {
+  display:flex; align-items:flex-start; gap:12px;
+  background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.28);
+  border-radius:8px; padding:14px 16px;
+}
+.modal-warn-icon { color:#f59e0b; flex-shrink:0; margin-top:2px; }
+.modal-warning p { font-size:0.85rem; }
+.modal-footer {
+  display:flex; justify-content:flex-end; gap:10px;
+  padding:16px 28px 22px; border-top:1px solid var(--border);
+}
+
+
+/* Main content area — offset from the top to clear the fixed nav */
+main {
+  margin-top:var(--nav-h);
+  padding:var(--pad) 44px;
+  max-width:1340px; margin-left:auto; margin-right:auto;
+  margin-top:var(--nav-h);
+}
+
+/* Pages are hidden by default and revealed by toggling the .active class */
+.page { display:none; }
+.page.active { display:block; }
+
+/* The header row at the top of each page */
+.page-header {
+  display:flex; align-items:flex-start; justify-content:space-between;
+  margin-bottom:28px; padding-top:8px; gap:20px; flex-wrap:wrap;
+}
+.page-eyebrow {
+  font-family:'Roboto Mono',monospace; font-size:0.72rem; font-weight:500;
+  letter-spacing:0.10em; text-transform:uppercase; color:var(--soft); margin-bottom:4px;
+}
+.page-title { font-size:32px; }
+.page-sub { font-size:15px; color:var(--accent); margin-top:6px; }
+.header-meta { display:flex; flex-direction:column; align-items:flex-end; gap:7px; }
+.timestamp { font-family:'Roboto Mono',monospace; font-size:0.74rem; color:var(--soft); }
+
+/* Section labels that appear above groups of content — left border accent included */
+.section-label {
+  font-family:'Roboto',sans-serif; font-size:0.72rem; font-weight:600;
+  letter-spacing:0.10em; text-transform:uppercase; color:var(--secondary);
+  margin:28px 0 12px;
+  border-left:3px solid var(--accent); padding-left:10px;
+}
+
+/* Status badges — used in page headers and sensor tables */
+.badge {
+  display:inline-flex; align-items:center;
+  font-family:'Roboto',sans-serif; font-size:0.74rem; font-weight:600;
+  letter-spacing:0.04em; padding:4px 12px; border-radius:20px;
+}
+.badge-green  { background:rgba(74,222,128,0.14);  color:#166534; border:1px solid rgba(74,222,128,0.32); }
+.badge-yellow { background:rgba(251,191,36,0.14);  color:#92400e; border:1px solid rgba(251,191,36,0.32); }
+.badge-red    { background:rgba(239,68,68,0.14);   color:#991b1b; border:1px solid rgba(239,68,68,0.30); }
+.badge-grey   { background:rgba(1,31,75,0.07);     color:var(--soft); border:1px solid var(--border); }
+
+/* Primary action buttons — used for connect, refresh, export etc. */
+.btn-primary {
+  display:inline-flex; align-items:center; gap:7px;
+  background:var(--secondary); border:none; cursor:pointer;
+  font-family:'Montserrat',sans-serif; font-size:0.82rem; font-weight:600;
+  letter-spacing:0.03em; color:var(--white);
+  padding:9px 20px; border-radius:var(--radius-sm);
+  transition:var(--tr); white-space:nowrap;
+}
+.btn-primary:hover    { background:var(--accent); transform:translateY(-1px); box-shadow:var(--shadow-sm); }
+.btn-primary:disabled { opacity:0.45; cursor:not-allowed; transform:none; }
+
+/* Secondary buttons like Cancel in the modal */
+.btn-secondary {
+  display:inline-flex; align-items:center; gap:7px;
+  background:transparent; border:1px solid var(--border); cursor:pointer;
+  font-family:'Roboto',sans-serif; font-size:0.84rem; font-weight:500;
+  color:var(--secondary); padding:9px 20px; border-radius:var(--radius-sm); transition:var(--tr);
+}
+.btn-secondary:hover { background:rgba(1,31,75,0.05); }
+.btn-icon { flex-shrink:0; }
+
+/* Dropdown selects used in the modal and history filter */
+.select-input {
+  background:var(--card-bg); border:1px solid var(--border); color:var(--primary);
+  font-family:'Roboto',sans-serif; font-size:0.84rem; font-weight:400;
+  padding:8px 14px; border-radius:var(--radius-sm); cursor:pointer; outline:none; transition:var(--tr);
+}
+.select-input:hover,.select-input:focus { border-color:var(--accent); }
+
+
+/* The dashed banner that appears on every page when no device is connected.
+   It points the user toward the Connect Device button in the nav. */
+.no-device-banner {
+  display:flex; align-items:center; gap:20px;
+  background:rgba(1,31,75,0.05);
+  border:1.5px dashed rgba(1,31,75,0.18);
+  border-radius:var(--radius);
+  padding:24px 28px; margin-bottom:24px; flex-wrap:wrap;
+}
+.no-device-icon {
+  width:56px; height:56px; flex-shrink:0;
+  background:rgba(1,31,75,0.06); border-radius:14px;
+  display:flex; align-items:center; justify-content:center; color:var(--soft);
+}
+.no-device-text { flex:1; min-width:200px; }
+.no-device-text strong {
+  font-family:'Montserrat',sans-serif; font-size:0.95rem; font-weight:600;
+  color:var(--primary); display:block; margin-bottom:4px;
+}
+.no-device-text p { font-size:0.84rem; color:var(--soft); line-height:1.55; }
+.no-device-text code {
+  background:rgba(0,91,150,0.10); padding:1px 5px; border-radius:4px; color:var(--accent);
+  font-family:'Roboto Mono',monospace; font-size:0.80rem;
+}
+
+
+/* The seven sensor cards on the dashboard — each shows an icon, the current
+   value, a mini progress bar, and a status line */
+.cards-grid {
+  display:grid; grid-template-columns:repeat(auto-fill,minmax(215px,1fr));
+  gap:14px; margin-bottom:6px;
+}
+.sensor-card {
+  background:var(--card-bg); border:1px solid var(--border);
+  border-radius:var(--radius); padding:18px 16px;
+  display:flex; align-items:flex-start; gap:13px;
+  box-shadow:var(--shadow-sm); transition:var(--tr); backdrop-filter:blur(8px);
+}
+.sensor-card:hover { transform:translateY(-3px); box-shadow:var(--shadow-md); border-color:rgba(0,91,150,0.22); }
+
+/* Cards dim themselves when no data is available yet */
+.sensor-card.no-data { opacity:0.60; }
+
+.card-icon-wrap {
+  width:36px; height:36px; flex-shrink:0;
+  background:rgba(0,91,150,0.09); border-radius:9px;
+  display:flex; align-items:center; justify-content:center; color:var(--accent);
+}
+.card-icon-svg { color:var(--accent); }
+.card-body { flex:1; min-width:0; }
+.card-label {
+  font-family:'Roboto',sans-serif; font-size:0.69rem; font-weight:500;
+  letter-spacing:0.07em; text-transform:uppercase; color:var(--soft);
+  display:block; margin-bottom:3px;
+}
+.card-value {
+  font-family:'Montserrat',sans-serif; font-size:1.72rem; font-weight:700;
+  color:var(--primary); line-height:1.1;
+}
+.card-unit {
+  font-family:'Roboto Mono',monospace; font-size:0.80rem; font-weight:400; color:var(--soft);
+}
+.card-bar { height:4px; background:rgba(0,91,150,0.10); border-radius:2px; margin:7px 0 4px; overflow:hidden; }
+.card-bar-fill {
+  height:100%; background:var(--accent); border-radius:2px;
+  transition:width 0.7s cubic-bezier(0.4,0,0.2,1);
+}
+.card-status { font-family:'Open Sans',sans-serif; font-size:0.72rem; font-weight:400; color:var(--soft); }
+
+/* Warning and danger states change the bar and icon accent color */
+.sensor-card.warn   .card-bar-fill  { background:#f59e0b; }
+.sensor-card.warn   .card-icon-wrap { background:rgba(245,158,11,0.10); }
+.sensor-card.warn   .card-icon-svg  { color:#f59e0b; }
+.sensor-card.danger .card-bar-fill  { background:#ef4444; }
+.sensor-card.danger .card-icon-wrap { background:rgba(239,68,68,0.10); }
+.sensor-card.danger .card-icon-svg  { color:#ef4444; }
+
+
+/* Alert cards shown below the sensor grid — color coded by severity */
+.alerts-panel { display:flex; flex-direction:column; gap:10px; margin-bottom:6px; }
+.alert {
+  display:flex; align-items:flex-start; gap:12px;
+  background:var(--card-bg); border:1px solid var(--border);
+  border-radius:var(--radius-sm); padding:13px 16px;
+  font-family:'Open Sans',sans-serif; font-size:0.86rem; line-height:1.55;
+  backdrop-filter:blur(8px);
+}
+.alert-icon-wrap { flex-shrink:0; margin-top:1px; }
+.alert-warn    { border-left:3px solid #f59e0b; background:rgba(245,158,11,0.05); }
+.alert-danger  { border-left:3px solid #ef4444; background:rgba(239,68,68,0.05); }
+.alert-success { border-left:3px solid #4ade80; background:rgba(74,222,128,0.05); }
+.alert-info    { border-left:3px solid var(--accent); background:rgba(0,91,150,0.05); }
+.alert-warn    .alert-icon-wrap { color:#f59e0b; }
+.alert-danger  .alert-icon-wrap { color:#ef4444; }
+.alert-success .alert-icon-wrap { color:#16a34a; }
+.alert-info    .alert-icon-wrap { color:var(--accent); }
+.alert-none {
+  font-family:'Open Sans',sans-serif; font-style:italic;
+  padding:13px 16px; background:var(--card-bg); border:1px solid var(--border);
+  border-radius:var(--radius-sm); font-size:0.86rem; color:var(--soft);
+}
+
+
+/* Chart containers — white-ish frosted cards that hold the Chart.js canvases */
+.chart-card {
+  background:var(--card-bg); border:1px solid var(--border);
+  border-radius:var(--radius); padding:22px 22px 18px;
+  box-shadow:var(--shadow-sm); backdrop-filter:blur(8px); margin-bottom:4px;
+}
+.chart-title {
+  font-family:'Roboto',sans-serif; font-size:0.74rem; font-weight:500;
+  letter-spacing:0.07em; text-transform:uppercase; color:var(--secondary); margin-bottom:14px;
+}
+
+/* The empty state shown inside a chart card before any data arrives */
+.chart-empty {
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:14px; padding:36px 20px; text-align:center;
+}
+.chart-empty .icon-chart-empty { transform:scale(1.8); }
+.chart-empty p { font-size:0.84rem; color:var(--soft); max-width:340px; line-height:1.55; }
+
+/* Two-column layout used on the Sensor Data page */
+.two-col { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:6px; }
+
+
+/* The readings table used on Sensor Data and History pages */
+.table-card {
+  background:var(--card-bg); border:1px solid var(--border);
+  border-radius:var(--radius); overflow:hidden;
+  box-shadow:var(--shadow-sm); backdrop-filter:blur(8px);
+}
+.data-table { width:100%; border-collapse:collapse; }
+.data-table thead tr { background:rgba(1,31,75,0.05); border-bottom:1px solid var(--border); }
+.data-table th {
+  text-align:left; padding:12px 16px;
+  font-family:'Roboto',sans-serif; font-size:0.70rem; font-weight:600;
+  letter-spacing:0.07em; text-transform:uppercase; color:var(--secondary);
+}
+.data-table td {
+  padding:11px 16px; font-family:'Open Sans',sans-serif;
+  font-size:0.84rem; font-weight:400; color:var(--primary);
+  border-bottom:1px solid rgba(1,31,75,0.05);
+}
+.data-table tbody tr:last-child td { border-bottom:none; }
+.data-table tbody tr:hover          { background:rgba(0,91,150,0.04); }
+
+/* Small colored pills used in the status column of data tables */
+.td-status {
+  display:inline-flex; align-items:center;
+  font-family:'Roboto',sans-serif;
+  padding:3px 9px; border-radius:10px; font-size:0.74rem; font-weight:500;
+}
+.td-ok     { background:rgba(74,222,128,0.14); color:#166534; }
+.td-warn   { background:rgba(245,158,11,0.14); color:#92400e; }
+.td-danger { background:rgba(239,68,68,0.14);  color:#991b1b; }
+.td-nodata { background:rgba(1,31,75,0.06);    color:var(--soft); }
+
+
+/* The three circular ring charts on the Power page */
+.power-grid {
+  display:grid; grid-template-columns:repeat(3,1fr);
+  gap:14px; margin-bottom:6px;
+}
+.power-card {
+  background:var(--card-bg); border:1px solid var(--border);
+  border-radius:var(--radius); padding:26px 18px;
+  display:flex; flex-direction:column; align-items:center; gap:10px;
+  box-shadow:var(--shadow-sm); backdrop-filter:blur(8px); transition:var(--tr);
+}
+.power-card:hover { transform:translateY(-3px); box-shadow:var(--shadow-md); }
+.power-card-icon {
+  width:44px; height:44px; background:rgba(0,91,150,0.10);
+  border-radius:11px; display:flex; align-items:center; justify-content:center;
+}
+.power-label {
+  font-family:'Roboto',sans-serif; font-size:0.74rem; font-weight:500;
+  letter-spacing:0.07em; text-transform:uppercase; color:var(--soft);
+}
+.power-ring-wrap { position:relative; width:120px; height:120px; }
+
+/* The SVG ring is rotated -90deg so it fills clockwise from the top */
+.power-ring { width:120px; height:120px; transform:rotate(-90deg); }
+.ring-track { fill:none; stroke:rgba(0,91,150,0.10); stroke-width:10; }
+.ring-fill {
+  fill:none; stroke:var(--accent); stroke-width:10; stroke-linecap:round;
+  stroke-dasharray:314; stroke-dashoffset:314;
+  transition:stroke-dashoffset 1.2s cubic-bezier(0.4,0,0.2,1);
+}
+.ring-solar   { stroke:#f59e0b; }
+.ring-runtime { stroke:var(--soft); }
+.ring-battery { stroke:var(--accent); }
+.power-ring-label {
+  position:absolute; inset:0; display:flex;
+  align-items:center; justify-content:center; flex-direction:column;
+}
+.power-big {
+  font-family:'Montserrat',sans-serif; font-size:1.90rem; font-weight:700;
+  color:var(--primary); line-height:1;
+}
+.power-unit { font-family:'Roboto Mono',monospace; font-size:0.75rem; color:var(--soft); }
+.power-meta { font-family:'Open Sans',sans-serif; font-size:0.78rem; color:var(--soft); text-align:center; }
+
+
+/* The four summary stat cards at the top of the History page */
+.summary-grid {
+  display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:6px;
+}
+.summary-card {
+  background:var(--card-bg); border:1px solid var(--border);
+  border-radius:var(--radius); padding:20px 16px;
+  display:flex; flex-direction:column; gap:4px;
+  box-shadow:var(--shadow-sm); backdrop-filter:blur(8px); transition:var(--tr);
+}
+.summary-card:hover { transform:translateY(-2px); box-shadow:var(--shadow-md); }
+.summary-title {
+  font-family:'Roboto',sans-serif; font-size:0.72rem; font-weight:500;
+  letter-spacing:0.06em; text-transform:uppercase; color:var(--soft);
+}
+.summary-value {
+  font-family:'Montserrat',sans-serif; font-size:1.55rem; font-weight:700;
+  color:var(--primary); line-height:1;
+}
+
+
+/* The About page hero card — side by side text and the decorative SVG diagram */
+.about-hero {
+  display:grid; grid-template-columns:1fr auto; gap:40px; align-items:center;
+  background:var(--card-bg); border:1px solid var(--border);
+  border-radius:var(--radius); padding:36px 44px;
+  box-shadow:var(--shadow-sm); backdrop-filter:blur(8px); margin-bottom:6px;
+}
+.about-hero-text h2 { font-size:1.80rem; margin-bottom:12px; }
+.about-hero-visual svg { width:150px; height:150px; opacity:.85; }
+
+/* The numbered step-by-step connection guide */
+.connection-guide {
+  display:flex; flex-direction:column; gap:0;
+  background:var(--card-bg); border:1px solid var(--border);
+  border-radius:var(--radius); overflow:hidden; box-shadow:var(--shadow-sm);
+}
+.guide-step {
+  display:flex; gap:24px; padding:22px 28px;
+  border-bottom:1px solid var(--border); transition:var(--tr);
+}
+.guide-step:last-child { border-bottom:none; }
+.guide-step:hover      { background:rgba(0,91,150,0.03); }
+.guide-num {
+  font-family:'Montserrat',sans-serif; font-size:1.55rem; font-weight:700;
+  color:rgba(0,91,150,0.16); flex-shrink:0; width:44px; padding-top:2px;
+}
+.guide-content { flex:1; }
+.guide-title {
+  font-family:'Roboto',sans-serif; font-size:0.95rem; font-weight:500;
+  color:var(--primary); margin-bottom:6px;
+}
+.guide-content p { font-size:0.85rem; color:var(--accent); line-height:1.60; }
+.guide-content strong { color:var(--primary); }
+.guide-content .code-block { max-height:220px; overflow-y:auto; }
+
+/* The six sensor explanation cards */
+.sensor-info-grid {
+  display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:6px;
+}
+.sensor-info-card {
+  background:var(--card-bg); border:1px solid var(--border);
+  border-radius:var(--radius); padding:20px 18px;
+  box-shadow:var(--shadow-sm); backdrop-filter:blur(8px); transition:var(--tr);
+}
+.sensor-info-card:hover { transform:translateY(-2px); box-shadow:var(--shadow-md); }
+.si-title {
+  font-family:'Roboto',sans-serif; font-size:0.88rem; font-weight:500;
+  color:var(--secondary); margin-bottom:7px;
+}
+.sensor-info-card p { font-size:0.82rem; color:var(--soft); line-height:1.60; }
+
+/* The sustainability callout block at the bottom of the About page */
+.sustain-block {
+  display:flex; align-items:flex-start; gap:18px;
+  background:rgba(0,91,150,0.06); border:1px solid rgba(0,91,150,0.18);
+  border-radius:var(--radius); padding:26px 28px; margin-top:6px;
+}
+.sustain-block h3 {
+  font-family:'Montserrat',sans-serif; font-size:1.05rem; font-weight:600;
+  color:var(--primary); margin-bottom:8px;
+}
+.sustain-block p { font-size:0.87rem; line-height:1.68; }
+
+
+/* Footer sits at the bottom with the brand name, description, and copyright */
+footer { background:var(--primary); margin-top:60px; padding:28px 44px; }
+.footer-inner {
+  max-width:1340px; margin:0 auto;
+  display:flex; align-items:center; justify-content:space-between;
+  flex-wrap:wrap; gap:10px;
+}
+.footer-brand {
+  display:flex; align-items:center; gap:8px;
+  font-family:'Montserrat',sans-serif; font-size:1.08rem; font-weight:700; color:var(--white);
+}
+.footer-leaf { color:var(--soft); transform:scale(0.9); }
+.footer-text { font-family:'Open Sans',sans-serif; font-size:0.78rem; color:rgba(244,248,252,0.46); }
+.footer-copy { font-family:'Roboto Mono',monospace; font-size:0.70rem; color:rgba(244,248,252,0.28); }
+
+/* Toast notification that slides in from the bottom right */
+#ll-toast {
+  position:fixed; bottom:28px; right:28px; z-index:300;
+  background:var(--primary); color:var(--white);
+  font-family:'Roboto',sans-serif; font-size:0.84rem; font-weight:500;
+  padding:12px 20px; border-radius:10px;
+  box-shadow:0 4px 24px rgba(1,31,75,0.28);
+  border-left:3px solid var(--accent);
+  max-width:320px; pointer-events:none;
+  opacity:0; transform:translateY(8px);
+  transition:opacity 0.3s ease, transform 0.3s ease;
+}
+#ll-toast.show { opacity:1; transform:translateY(0); }
+
+
+/* Responsive breakpoints — we reflow the grid layouts for smaller screens */
+
+/* At 1100px we drop the three-column info grids to two columns */
+@media (max-width:1100px) {
+  .sensor-info-grid { grid-template-columns:repeat(2,1fr); }
+  .summary-grid     { grid-template-columns:repeat(2,1fr); }
+}
+
+/* At 900px (tablet range) we collapse nav padding, hide the status pill,
+   and stack most multi-column layouts to single column */
+@media (max-width:900px) {
+  nav  { padding:0 18px; gap:8px; }
+  .nav-links li button { padding:6px 9px; font-size:0.76rem; }
+  .device-status       { display:none; }
+  main  { padding:var(--pad) 20px; }
+  .two-col    { grid-template-columns:1fr; }
+  .power-grid { grid-template-columns:1fr 1fr; }
+  .about-hero { grid-template-columns:1fr; padding:24px 22px; }
+  .about-hero-visual { display:none; }
+}
+
+/* At 640px (mobile) we tighten everything up to one or two columns */
+@media (max-width:640px) {
+  .cards-grid       { grid-template-columns:repeat(2,1fr); }
+  .power-grid       { grid-template-columns:1fr; }
+  .summary-grid     { grid-template-columns:repeat(2,1fr); }
+  .sensor-info-grid { grid-template-columns:1fr; }
+  .page-title       { font-size:26px; }
+  footer            { padding:22px 20px; }
+  .footer-inner     { flex-direction:column; align-items:flex-start; gap:5px; }
+  .guide-step       { flex-direction:column; gap:8px; }
+  .form-row         { grid-template-columns:1fr; }
+  .no-device-banner { flex-direction:column; align-items:flex-start; }
+}
